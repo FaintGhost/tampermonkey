@@ -58,7 +58,7 @@
 | 处理 | 内容流删除水印 `BDC...EMC` 标记块后重新压缩 | 图片直接嵌入（无重编码） |
 | 组装 | 原 PDF 保存 | pdf-lib 逐页 `embedJpg` 合成 |
 
-依赖仅在运行时从 jsdelivr CDN 加载 `pdf-lib`（`@require` 声明）。
+`pdf-lib` 已内联进脚本（约 500KB），无需任何外部 CDN，离线也能用。
 
 ## 开发与更新
 
