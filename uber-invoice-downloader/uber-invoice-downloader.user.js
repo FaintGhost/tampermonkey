@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Uber 行程票据批量下载 (Invoice 优先, Receipt 兜底)
 // @namespace    https://riders.uber.com/
-// @version      1.0.0
+// @version      1.0.1
 // @description  批量下载 Uber Activity 里的行程票据：有 Invoice 下 Invoice(PDF)，没有则下 Receipt(PDF)，按 1.pdf/2.pdf... 命名，并生成对照 CSV
 // @license      MIT
 // @match        https://riders.uber.com/trips*
