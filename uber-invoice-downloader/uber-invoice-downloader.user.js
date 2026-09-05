@@ -3,6 +3,7 @@
 // @namespace    https://riders.uber.com/
 // @version      1.0.0
 // @description  批量下载 Uber Activity 里的行程票据：有 Invoice 下 Invoice(PDF)，没有则下 Receipt(PDF)，按 1.pdf/2.pdf... 命名，并生成对照 CSV
+// @license      MIT
 // @match        https://riders.uber.com/trips*
 // @grant        GM_download
 // @grant        GM.xmlHttpRequest
