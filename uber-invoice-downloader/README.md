@@ -13,9 +13,16 @@
 
 ## 安装
 
+### 方式一：GreasyFork（推荐，自动更新）
+
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/)（或 Violentmonkey）
-2. 复制 `uber-invoice-downloader.user.js` 全部内容
-3. Tampermonkey → 管理面板 → 「+」新建脚本 → 粘贴 → Ctrl+S 保存
+2. 打开脚本页：[greasyfork.org/zh-CN/scripts/594485](https://greasyfork.org/zh-CN/scripts/594485)
+3. 点击「安装此脚本」→ 确认安装
+
+### 方式二：手动安装（本地开发版）
+
+1. 复制 `uber-invoice-downloader.user.js` 全部内容
+2. Tampermonkey → 管理面板 → 「+」新建脚本 → 粘贴 → Ctrl+S 保存
 
 ## 使用
 

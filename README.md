@@ -7,7 +7,7 @@
 | 脚本 | 说明 | 安装 |
 |------|------|------|
 | [smartedu-pdf-downloader](smartedu-pdf-downloader/) | 智慧教育平台 / 人教社电子教材 PDF 下载（去水印） | [GreasyFork](https://greasyfork.org/zh-CN/scripts/593206) |
-| [uber-invoice-downloader](uber-invoice-downloader/) | Uber 行程票据批量下载（Invoice 优先，Receipt 兜底，生成明细 CSV） | 手动安装 |
+| [uber-invoice-downloader](uber-invoice-downloader/) | Uber 行程票据批量下载（Invoice 优先，Receipt 兜底，生成明细 CSV） | [GreasyFork](https://greasyfork.org/zh-CN/scripts/594485) |
 
 ## 目录结构
 
