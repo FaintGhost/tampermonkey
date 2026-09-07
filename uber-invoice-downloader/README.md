@@ -1,9 +1,10 @@
 # Uber 行程票据批量下载（Invoice 优先，Receipt 兜底）
 
-一个 Tampermonkey 用户脚本，在 [Uber Riders 行程页](https://riders.uber.com/trips) 批量下载行程票据 PDF：有 Invoice 优先下 Invoice，没有则自动下 Receipt，并生成明细 CSV。
+一个 Tampermonkey 用户脚本，在 [Uber Riders 行程页](https://riders.uber.com/trips) 下载行程票据 PDF：既可批量下载，也可在每张行程卡片上单独下载；有 Invoice 优先下 Invoice，没有则自动下 Receipt，批量模式另生成明细 CSV。
 
 ## 功能
 
+- **单条下载**：每张行程卡片右上角有「⬇ 下载」按钮，不用点进详情页即可下载该行程票据，文件命名为 `uber_Sep-7_xxxxxxxx.pdf`（日期 + uuid 前缀）
 - **批量下载**：遍历指定日期范围内的全部行程，自动下载票据 PDF
 - **Invoice 优先**：通过 `GetInvoiceFiles` 接口取 Invoice PDF；无 Invoice 的行程（如部分国家/地区）自动回退到 Receipt PDF
 - **自动跳过**：取消（Canceled）/ 未完成（Unfulfilled）的行程不产生票据，自动跳过
@@ -27,9 +28,10 @@
 ## 使用
 
 1. 登录并打开 <https://riders.uber.com/trips>
-2. 页面右下角出现「Uber 票据批量下载」面板，按需调整日期范围（默认最近 30 天）
-3. 点击「开始批量下载 (Invoice 优先)」，面板内实时显示进度和日志
-4. PDF 逐个保存到浏览器下载目录，完成后自动保存 `uber_trips.csv`
+2. **单条下载**：每张行程卡片右上角有「⬇ 下载」按钮，点击后直接下载该行程票据 PDF（Invoice 优先）
+3. **批量下载**：页面右下角出现「Uber 票据批量下载」面板，按需调整日期范围（默认最近 30 天）
+4. 点击「开始批量下载 (Invoice 优先)」，面板内实时显示进度和日志
+5. PDF 逐个保存到浏览器下载目录，完成后自动保存 `uber_trips.csv`
 
 > 首次运行浏览器可能提示「允许此网站下载多个文件」，允许一次即可。
 

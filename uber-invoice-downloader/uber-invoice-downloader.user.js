@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Uber 行程票据批量下载 (Invoice 优先, Receipt 兜底)
 // @namespace    https://riders.uber.com/
-// @version      1.0.1
-// @description  批量下载 Uber Activity 里的行程票据：有 Invoice 下 Invoice(PDF)，没有则下 Receipt(PDF)，按 1.pdf/2.pdf... 命名，并生成对照 CSV
+// @version      1.1.0
+// @description  下载 Uber Activity 里的行程票据：支持批量下载（按 1.pdf/2.pdf... 命名并生成对照 CSV），也可在每张行程卡片上单独下载；有 Invoice 下 Invoice(PDF)，没有则下 Receipt(PDF)
 // @license      MIT
 // @match        https://riders.uber.com/trips*
 // @grant        GM_download
@@ -284,6 +284,68 @@
     }
   }
 
+  /************** 单条行程下载按钮 **************/
+  // 行程卡片都是指向 /trips/<uuid> 的链接，从 href 提取 uuid
+  const TRIP_LINK_RE = /\/trips\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/;
+
+  async function downloadSingleTrip(uuid, btn, anchor) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const orig = btn.textContent;
+    const resetLater = () => setTimeout(() => { btn.textContent = orig; }, 4000);
+    try {
+      btn.textContent = '查询中…';
+      const file = await resolvePdfUrl({ uuid });
+      if (!file) {
+        btn.textContent = '无票据';
+        log(`[单条] ${uuid.slice(0, 8)} 无票据可用（可能已取消/未完成）`);
+        resetLater();
+        return;
+      }
+      // 从卡片文本里抓 "Sep 7" 之类日期，拼进文件名方便辨认
+      const dm = (anchor.textContent || '').match(/([A-Z][a-z]{2})\s+(\d{1,2})/);
+      const filename = `uber_${dm ? `${dm[1]}-${dm[2]}_` : ''}${uuid.slice(0, 8)}.pdf`;
+      btn.textContent = '下载中…';
+      await gmDownload(file.url, filename);
+      btn.textContent = '已下载 ✓';
+      log(`[单条] ${filename} (${file.type}) <- ${uuid.slice(0, 8)}`);
+      resetLater();
+    } catch (e) {
+      btn.textContent = '失败,重试';
+      log(`[单条] ${uuid.slice(0, 8)} 失败: ${e.message}`);
+      resetLater();
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function injectTripButtons() {
+    const anchors = document.querySelectorAll('a[href*="/trips/"]');
+    for (const a of anchors) {
+      const m = (a.getAttribute('href') || '').match(TRIP_LINK_RE);
+      if (!m) continue;
+      const uuid = m[1];
+      if (a.dataset.uberDlBtn === uuid) continue; // 已注入
+      a.dataset.uberDlBtn = uuid;
+      if (getComputedStyle(a).position === 'static') a.style.position = 'relative';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '⬇ 下载';
+      btn.title = '下载该行程票据 PDF (Invoice 优先, Receipt 兜底)';
+      btn.style.cssText =
+        'position:absolute;top:8px;right:8px;z-index:9999;background:#000;color:#fff;' +
+        'border:none;border-radius:6px;padding:4px 10px;font:12px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;' +
+        'cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3);';
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        downloadSingleTrip(uuid, btn, a);
+      });
+      a.appendChild(btn);
+    }
+  }
+  /**********************************************/
+
   function buildPanel() {
     if (document.getElementById('uber-dl-panel')) return;
     const panel = document.createElement('div');
@@ -319,7 +381,11 @@
     panel.querySelector('#uber-dl-start-date').value = fmt(ago30);
   }
 
-  // 页面是 SPA，导航后定时确保面板存在
+  // 页面是 SPA，导航后定时确保面板存在、新渲染的行程卡片注入下载按钮
   buildPanel();
-  setInterval(buildPanel, 3000);
+  injectTripButtons();
+  setInterval(() => {
+    buildPanel();
+    injectTripButtons();
+  }, 3000);
 })();
