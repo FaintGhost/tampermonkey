@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Uber 行程票据批量下载 (Invoice 优先, Receipt 兜底)
 // @namespace    https://riders.uber.com/
-// @version      1.1.2
+// @version      1.1.3
 // @description  下载 Uber Activity 里的行程票据：支持批量下载（按 1.pdf/2.pdf... 命名并生成对照 CSV），也可在每张行程卡片上单独下载；有 Invoice 下 Invoice(PDF)，没有则下 Receipt(PDF)
 // @license      MIT
 // @match        https://riders.uber.com/trips*
@@ -390,16 +390,34 @@
 
   function buildPanel() {
     if (document.getElementById('uber-dl-panel')) return;
+    const LS_POS = 'uber-dl-panel-pos';
+    const LS_MIN = 'uber-dl-panel-min';
     const panel = document.createElement('div');
     panel.id = 'uber-dl-panel';
     panel.style.cssText =
       'position:fixed;right:16px;bottom:16px;z-index:99999;width:360px;background:#fff;color:#000;' +
       'border:1px solid #ccc;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.25);padding:12px;' +
       'font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;';
+    // 恢复上次拖到的位置
+    try {
+      const pos = JSON.parse(localStorage.getItem(LS_POS) || 'null');
+      if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+        panel.style.left = pos.left + 'px';
+        panel.style.top = pos.top + 'px';
+      }
+    } catch (e) { /* ignore */ }
     const inputStyle =
       'border:1px solid #ccc;border-radius:4px;padding:4px 6px;font-size:12px;width:100%;box-sizing:border-box;';
     panel.innerHTML =
-      '<div style="font-weight:700;margin-bottom:8px;">Uber 票据批量下载</div>' +
+      '<div id="uber-dl-header" style="display:flex;align-items:center;justify-content:space-between;' +
+      'font-weight:700;margin-bottom:8px;cursor:move;user-select:none;">' +
+      '<span>Uber 票据批量下载</span>' +
+      '<button id="uber-dl-min" title="收起/展开" style="background:none;border:none;cursor:pointer;' +
+      'font-size:15px;line-height:1;padding:0 4px;color:#555;">—</button>' +
+      '</div>' +
+      '<div id="uber-dl-body">' +
       '<div style="display:flex;gap:6px;margin-bottom:6px;">' +
       '<label style="flex:1;font-size:11px;color:#555;">开始日期<input type="date" id="uber-dl-start-date" style="' + inputStyle + '"></label>' +
       '<label style="flex:1;font-size:11px;color:#555;">结束日期<input type="date" id="uber-dl-end-date" style="' + inputStyle + '"></label>' +
@@ -409,9 +427,53 @@
       'padding:8px 14px;cursor:pointer;font-size:13px;">开始批量下载 (Invoice 优先)</button>' +
       '<div id="uber-dl-status" style="margin:8px 0;color:#333;"></div>' +
       '<pre id="uber-dl-log" style="max-height:220px;overflow:auto;background:#f6f6f6;border-radius:6px;' +
-      'padding:8px;margin:0;white-space:pre-wrap;word-break:break-all;font-size:11px;"></pre>';
+      'padding:8px;margin:0;white-space:pre-wrap;word-break:break-all;font-size:11px;"></pre>' +
+      '</div>';
     document.body.appendChild(panel);
     panel.querySelector('#uber-dl-start').addEventListener('click', run);
+
+    // 收起/展开：收起后只留一条标题栏，状态存 localStorage
+    const body = panel.querySelector('#uber-dl-body');
+    const minBtn = panel.querySelector('#uber-dl-min');
+    const header = panel.querySelector('#uber-dl-header');
+    const applyMin = (min) => {
+      body.style.display = min ? 'none' : '';
+      header.style.marginBottom = min ? '0' : '8px';
+      panel.style.width = min ? 'auto' : '360px';
+      minBtn.textContent = min ? '＋' : '—';
+    };
+    minBtn.addEventListener('click', () => {
+      const min = body.style.display !== 'none';
+      applyMin(min);
+      try { localStorage.setItem(LS_MIN, min ? '1' : '0'); } catch (e) { /* ignore */ }
+    });
+    applyMin(localStorage.getItem(LS_MIN) === '1');
+
+    // 按住标题栏拖拽移动，位置存 localStorage
+    header.addEventListener('mousedown', (e) => {
+      if (e.target === minBtn) return;
+      e.preventDefault();
+      const rect = panel.getBoundingClientRect();
+      const dx = e.clientX - rect.left;
+      const dy = e.clientY - rect.top;
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      const onMove = (ev) => {
+        const left = Math.max(0, Math.min(window.innerWidth - rect.width, ev.clientX - dx));
+        const top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - dy));
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        try {
+          localStorage.setItem(LS_POS, JSON.stringify({ left: panel.offsetLeft, top: panel.offsetTop }));
+        } catch (e2) { /* ignore */ }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
 
     // 默认日期：结束 = 今天，开始 = 今天往前 30 天
     const fmt = (d) =>
