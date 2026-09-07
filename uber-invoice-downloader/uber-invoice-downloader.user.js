@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Uber 行程票据批量下载 (Invoice 优先, Receipt 兜底)
 // @namespace    https://riders.uber.com/
-// @version      1.1.0
+// @version      1.1.1
 // @description  下载 Uber Activity 里的行程票据：支持批量下载（按 1.pdf/2.pdf... 命名并生成对照 CSV），也可在每张行程卡片上单独下载；有 Invoice 下 Invoice(PDF)，没有则下 Receipt(PDF)
 // @license      MIT
 // @match        https://riders.uber.com/trips*
@@ -285,10 +285,22 @@
   }
 
   /************** 单条行程下载按钮 **************/
-  // 行程卡片都是指向 /trips/<uuid> 的链接，从 href 提取 uuid
+  // 只有精选大卡片的 "Details" 是指向 /trips/<uuid> 的链接；其余小卡片上
+  // 唯一能拿到 uuid 的地方是 "Help" 链接的 jobId 参数，两条路径都要覆盖。
   const TRIP_LINK_RE = /\/trips\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/;
+  const JOB_ID_RE = /[?&]jobId=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/;
 
-  async function downloadSingleTrip(uuid, btn, anchor) {
+  // 从卡片内某个元素向上找卡片根节点：每张卡片都有且只有 1 个带 jobId 的
+  // Help 链接，所以一直爬到「父元素包含 2 张以上卡片（2 个 jobId 链接）」为止。
+  function findCardRoot(el) {
+    while (el.parentElement && el.parentElement !== document.body) {
+      if (el.parentElement.querySelectorAll('a[href*="jobId="]').length > 1) return el;
+      el = el.parentElement;
+    }
+    return el;
+  }
+
+  async function downloadSingleTrip(uuid, btn, cardRoot) {
     if (btn.disabled) return;
     btn.disabled = true;
     const orig = btn.textContent;
@@ -303,7 +315,7 @@
         return;
       }
       // 从卡片文本里抓 "Sep 7" 之类日期，拼进文件名方便辨认
-      const dm = (anchor.textContent || '').match(/([A-Z][a-z]{2})\s+(\d{1,2})/);
+      const dm = (cardRoot.textContent || '').match(/([A-Z][a-z]{2})\s+(\d{1,2})/);
       const filename = `uber_${dm ? `${dm[1]}-${dm[2]}_` : ''}${uuid.slice(0, 8)}.pdf`;
       btn.textContent = '下载中…';
       await gmDownload(file.url, filename);
@@ -320,28 +332,38 @@
   }
 
   function injectTripButtons() {
-    const anchors = document.querySelectorAll('a[href*="/trips/"]');
-    for (const a of anchors) {
-      const m = (a.getAttribute('href') || '').match(TRIP_LINK_RE);
-      if (!m) continue;
-      const uuid = m[1];
-      if (a.dataset.uberDlBtn === uuid) continue; // 已注入
-      a.dataset.uberDlBtn = uuid;
-      if (getComputedStyle(a).position === 'static') a.style.position = 'relative';
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = '⬇ 下载';
-      btn.title = '下载该行程票据 PDF (Invoice 优先, Receipt 兜底)';
-      btn.style.cssText =
-        'position:absolute;top:8px;right:8px;z-index:9999;background:#000;color:#fff;' +
-        'border:none;border-radius:6px;padding:4px 10px;font:12px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;' +
-        'cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3);';
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        downloadSingleTrip(uuid, btn, a);
-      });
-      a.appendChild(btn);
+    // pass 1: Help 链接的 jobId（覆盖所有卡片）
+    // pass 2: /trips/<uuid> 链接（兜底，防 Help 链接哪天没了）
+    const sources = [
+      { selector: 'a[href*="jobId="]', re: JOB_ID_RE },
+      { selector: 'a[href*="/trips/"]', re: TRIP_LINK_RE },
+    ];
+    for (const { selector, re } of sources) {
+      for (const a of document.querySelectorAll(selector)) {
+        const m = (a.getAttribute('href') || '').match(re);
+        if (!m) continue;
+        const uuid = m[1];
+        // 同一 uuid 的按钮已存在就跳过（精选大卡片会同时命中两条路径）
+        if (document.querySelector(`.uber-dl-trip-btn[data-uuid="${uuid}"]`)) continue;
+        const cardRoot = findCardRoot(a);
+        if (getComputedStyle(cardRoot).position === 'static') cardRoot.style.position = 'relative';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'uber-dl-trip-btn';
+        btn.dataset.uuid = uuid;
+        btn.textContent = '⬇ 下载';
+        btn.title = '下载该行程票据 PDF (Invoice 优先, Receipt 兜底)';
+        btn.style.cssText =
+          'position:absolute;top:8px;right:8px;z-index:9999;background:#000;color:#fff;' +
+          'border:none;border-radius:6px;padding:4px 10px;font:12px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;' +
+          'cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3);';
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          downloadSingleTrip(uuid, btn, cardRoot);
+        });
+        cardRoot.appendChild(btn);
+      }
     }
   }
   /**********************************************/
@@ -381,9 +403,18 @@
     panel.querySelector('#uber-dl-start-date').value = fmt(ago30);
   }
 
-  // 页面是 SPA，导航后定时确保面板存在、新渲染的行程卡片注入下载按钮
+  // 页面是 SPA，导航后定时确保面板存在、新渲染的行程卡片注入下载按钮。
+  // MutationObserver 让新卡片立刻有按钮（不等 3s 轮询），轮询留作兜底。
   buildPanel();
   injectTripButtons();
+  let injectTimer = null;
+  new MutationObserver(() => {
+    clearTimeout(injectTimer);
+    injectTimer = setTimeout(() => {
+      buildPanel();
+      injectTripButtons();
+    }, 300);
+  }).observe(document.body, { childList: true, subtree: true });
   setInterval(() => {
     buildPanel();
     injectTripButtons();
