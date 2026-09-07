@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Uber 行程票据批量下载 (Invoice 优先, Receipt 兜底)
 // @namespace    https://riders.uber.com/
-// @version      1.1.1
+// @version      1.1.2
 // @description  下载 Uber Activity 里的行程票据：支持批量下载（按 1.pdf/2.pdf... 命名并生成对照 CSV），也可在每张行程卡片上单独下载；有 Invoice 下 Invoice(PDF)，没有则下 Receipt(PDF)
 // @license      MIT
 // @match        https://riders.uber.com/trips*
@@ -303,8 +303,8 @@
   async function downloadSingleTrip(uuid, btn, cardRoot) {
     if (btn.disabled) return;
     btn.disabled = true;
-    const orig = btn.textContent;
-    const resetLater = () => setTimeout(() => { btn.textContent = orig; }, 4000);
+    const orig = btn.innerHTML;
+    const resetLater = () => setTimeout(() => { btn.innerHTML = orig; }, 4000);
     try {
       btn.textContent = '查询中…';
       const file = await resolvePdfUrl({ uuid });
@@ -331,7 +331,22 @@
     }
   }
 
+  const DL_ICON_HTML =
+    '<div aria-hidden="true" style="display:flex;margin-right:4px;">' +
+    '<svg width="12px" height="12px" viewBox="0 0 24 24" fill="none"><title>Download</title>' +
+    '<path d="M13 3v9.6l3.3-3.3 1.4 1.4-5.7 5.7-5.7-5.7 1.4-1.4 3.3 3.3V3h2z" fill="currentColor"></path>' +
+    '<path d="M5 19h14v2H5v-2z" fill="currentColor"></path></svg></div>';
+
+  function ensureBtnStyle() {
+    if (document.getElementById('uber-dl-trip-btn-style')) return;
+    const st = document.createElement('style');
+    st.id = 'uber-dl-trip-btn-style';
+    st.textContent = '.uber-dl-trip-btn:hover{background:#e5e5e5 !important;}';
+    document.head.appendChild(st);
+  }
+
   function injectTripButtons() {
+    ensureBtnStyle();
     // pass 1: Help 链接的 jobId（覆盖所有卡片）
     // pass 2: /trips/<uuid> 链接（兜底，防 Help 链接哪天没了）
     const sources = [
@@ -346,23 +361,28 @@
         // 同一 uuid 的按钮已存在就跳过（精选大卡片会同时命中两条路径）
         if (document.querySelector(`.uber-dl-trip-btn[data-uuid="${uuid}"]`)) continue;
         const cardRoot = findCardRoot(a);
-        if (getComputedStyle(cardRoot).position === 'static') cardRoot.style.position = 'relative';
+        // 插入位置：有 Details 放 Details 旁边，否则放 Help 旁边
+        const detailsLink = [...cardRoot.querySelectorAll('a[href*="/trips/"]')]
+          .find((x) => TRIP_LINK_RE.test(x.getAttribute('href') || ''));
+        const refLink = detailsLink || a;
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'uber-dl-trip-btn';
         btn.dataset.uuid = uuid;
-        btn.textContent = '⬇ 下载';
-        btn.title = '下载该行程票据 PDF (Invoice 优先, Receipt 兜底)';
+        // 与 Uber 自带 Help/Details 按钮同款样式（灰色圆角 pill + 12px 图标）
         btn.style.cssText =
-          'position:absolute;top:8px;right:8px;z-index:9999;background:#000;color:#fff;' +
-          'border:none;border-radius:6px;padding:4px 10px;font:12px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;' +
-          'cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3);';
+          'display:flex;align-items:center;background:rgb(243,243,243);color:#000;border:none;' +
+          'border-radius:999px;padding:6px 8px;height:28px;box-sizing:border-box;margin-left:8px;' +
+          'font:500 12px/16px "UberMoveText",system-ui,"Helvetica Neue",Helvetica,Arial,sans-serif;' +
+          'cursor:pointer;text-decoration:none;';
+        btn.innerHTML = DL_ICON_HTML + '下载';
+        btn.title = '下载该行程票据 PDF (Invoice 优先, Receipt 兜底)';
         btn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
           downloadSingleTrip(uuid, btn, cardRoot);
         });
-        cardRoot.appendChild(btn);
+        refLink.insertAdjacentElement('afterend', btn);
       }
     }
   }
