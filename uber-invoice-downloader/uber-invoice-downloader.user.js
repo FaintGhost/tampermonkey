@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Uber 行程票据批量下载 (Invoice 优先, Receipt 兜底)
 // @namespace    https://riders.uber.com/
-// @version      1.1.3
+// @version      1.2.0
 // @description  下载 Uber Activity 里的行程票据：支持批量下载（按 1.pdf/2.pdf... 命名并生成对照 CSV），也可在每张行程卡片上单独下载；有 Invoice 下 Invoice(PDF)，没有则下 Receipt(PDF)
 // @license      MIT
 // @match        https://riders.uber.com/trips*
@@ -361,6 +361,12 @@
         // 同一 uuid 的按钮已存在就跳过（精选大卡片会同时命中两条路径）
         if (document.querySelector(`.uber-dl-trip-btn[data-uuid="${uuid}"]`)) continue;
         const cardRoot = findCardRoot(a);
+        // 取消/未完成的行程直接整张卡片隐藏，UI 上不占位
+        const cardText = cardRoot.textContent || '';
+        if (CONFIG.skipKeywords.some((k) => cardText.includes(k))) {
+          cardRoot.style.display = 'none';
+          continue;
+        }
         // 插入位置：有 Details 放 Details 旁边，否则放 Help 旁边
         const detailsLink = [...cardRoot.querySelectorAll('a[href*="/trips/"]')]
           .find((x) => TRIP_LINK_RE.test(x.getAttribute('href') || ''));
